@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartFacility Reservation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+        body { background: #e8f0fe; padding: 10px; }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { text-align: center; color: #2563eb; margin: 15px 0; }
+
+        .tab-buttons { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 15px; }
+        .tab-btn { 
+            padding: 10px 12px; 
+            background: #e2e8f0; 
+            border: none; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 14px;
+            flex: 1;
+            min-width: 80px;
+        }
+        .tab-btn.active { background: #2563eb; color: white; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .card { background: white; padding: 20px; border-radius: 10px; margin-bottom: 15px; }
+        h2 { font-size: 18px; margin-bottom: 15px; color: #333; }
+
+        label { display: block; margin: 12px 0 5px; font-size: 14px; font-weight: 500; }
+        input, select, textarea { 
+            width: 100%; 
+            padding: 10px; 
+            border: 1px solid #ccc; 
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .time-row { display: flex; gap: 10px; }
+        .time-row > div { flex: 1; }
+
+        button { padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; margin-top: 10px; }
+        .btn-green { background: #16a34a; color: white; }
+        .btn-yellow { background: #f59e0b; color: white; }
+        .btn-blue { background: #2563eb; color: white; }
+        .btn-red { background: #dc2626; color: white; }
+        .btn-sm { padding: 5px 10px; font-size: 12px; margin: 3px; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f5f5f5; }
+
+        .facility-item { padding: 12px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 8px; }
+        .avail { color: green; }
+        .pending { color: orange; }
+        .taken { color: red; }
+
+        .message { padding: 12px; border-radius: 5px; margin: 10px 0; display: none; }
+        .message.show { display: block; }
+        .msg-success { background: #dcfce7; color: #166534; }
+        .msg-error { background: #fee2e2; color: #991b1b; }
+        .msg-info { background: #dbeafe; color: #1e40af; }
+
+        .hidden { display: none !important; }
+
+        .popup {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .popup.show { display: flex; }
+        .popup-box {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 300px;
+            text-align: center;
+        }
+
+        .receipt-popup {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            padding: 15px;
+            z-index: 150;
+        }
+        .receipt-popup.show { display: flex; }
+        .receipt-box {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            width: 100%;
+            max-width: 360px;
+        }
+        .receipt-box h3 { text-align: center; color: #2563eb; margin-bottom: 10px; }
+        .receipt-box p { margin: 6px 0; font-size: 14px; }
+        .receipt-box hr { border: none; border-top: 2px dashed #ddd; margin: 12px 0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🏫 SMSHS Online Reservation Management</h1>
+
+    <div class="tab-buttons">
+        <button class="tab-btn active" onclick="openTab('availability')">📅 Availability</button>
+        <button class="tab-btn" onclick="openTab('reserve')">📝 Reserve Facility</button>
+        <button class="tab-btn" onclick="openAdminTab()">🔐 Admin Panel</button>
+    </div>
+
+    <div id="message" class="message"></div>
+
+    <!-- 📅 AVAILABILITY -->
+    <div id="availability" class="tab-content active">
+        <div class="card">
+            <h2>📅 Facility Availability</h2>
+            <label>Select Date:</label>
+            <input type="date" id="avail-date" onchange="updateAvailability()">
+            <p style="margin: 10px 0; font-size: 13px;">
+                <span class="avail">● Available</span> | 
+                <span class="pending">● Pending Approval</span> | 
+                <span class="taken">● Reserved</span>
+            </p>
+            <div id="facility-list"></div>
+        </div>
+    </div>
+
+    <!-- 📝 RESERVE -->
+    <div id="reserve" class="tab-content">
+        <div class="card">
+            <h2>📝 Reserve a Facility</h2>
+            <form onsubmit="submitForm(event)">
+                <label>Your Full Name (Requester):</label>
+                <input type="text" id="student-name" placeholder="Enter your name" required>
+
+                <label>👩‍🏫 Teacher / Facilitator:</label>
+                <input type="text" id="teacher-name" placeholder="Name of teacher in charge" required>
+
+                <label>Facility / Room:</label>
+                <select id="facility-select" required>
+                    <option value="">-- Select Facility --</option>
+                    <option value="avr">AVR Room</option>
+                    <option value="computer">Computer Laboratory</option>
+                    <option value="science">Science Laboratory</option>
+                    <option value="cafe">Research Cafe</option>
+                    <option value="stage">Main Stage</option>
+                    <option value="grounds">School Grounds</option>
+                </select>
+
+                <label>Date of Use:</label>
+                <input type="date" id="use-date" required>
+
+                <div class="time-row">
+                    <div>
+                        <label>Start Time:</label>
+                        <input type="time" id="start-time" required>
+                    </div>
+                    <div>
+                        <label>End Time:</label>
+                        <input type="time" id="end-time" required>
+                    </div>
+                </div>
+
+                <label>Purpose of Use:</label>
+                <textarea id="purpose" rows="3" placeholder="Describe what this is for..." required></textarea>
+
+                <br>
+                <button type="button" class="btn-yellow" onclick="checkSlot()">🔍 Check Availability</button>
+                <button type="submit" class="btn-green">✅ Submit Request</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 🔐 ADMIN PANEL -->
+    <div id="admin" class="tab-content">
+        <div class="card">
+            <h2>🔐 Admin — All Requests</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Ref #</th>
+                        <th>Facility</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Requester</th>
+                        <th>Teacher</th>
+                        <th>Purpose</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="admin-table"></tbody>
+            </table>
+            <p id="no-admin" class="hidden" style="text-align:center; color:#888; padding:20px;">No requests yet.</p>
+        </div>
+    </div>
+</div>
+
+<!-- 🔐 PASSWORD POPUP -->
+<div id="password-popup" class="popup" onclick="if(event.target===this){closePopup()}">
+    <div class="popup-box">
+        <h3>🔐 Admin Login</h3>
+        <p style="font-size:14px; color:#666; margin:10px 0;">Enter password to continue</p>
+        <input type="password" id="password-input" placeholder="Enter password">
+        <p id="wrong-password" class="hidden" style="color:red; font-size:12px; margin:8px 0;">❌ Wrong password!</p>
+        <div style="display:flex; gap:8px; margin-top:15px;">
+            <button class="btn-blue" style="flex:1; margin:0;" onclick="checkPassword()">Login</button>
+            <button class="btn-red" style="flex:1; margin:0;" onclick="closePopup()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- 🧾 RECEIPT POPUP -->
+<div id="receipt-popup" class="receipt-popup" onclick="if(event.target===this){closeReceipt()}">
+    <div class="receipt-box" id="receipt-content"></div>
+</div>
+
+<script>
+const ADMIN_PASSWORD = 'admin123';
+let adminLoggedIn = false;
+
+const facilities = {
+    'avr': 'AVR Room',
+    'computer': 'Computer Laboratory',
+    'science': 'Science Laboratory',
+    'cafe': 'Research Cafe',
+    'stage': 'Main Stage',
+    'grounds': 'School Grounds'
+};
+
+let requests = JSON.parse(localStorage.getItem('reservation-data')) || [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('avail-date').value = today;
+    document.getElementById('use-date').min = today;
+    updateAvailability();
+});
+
+function openTab(tabName) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    document.getElementById(tabName).classList.add('active');
+    if (tabName === 'availability') updateAvailability();
+}
+
+function openAdminTab() {
+    if (adminLoggedIn) {
+        showAdminTab();
+    } else {
+        document.getElementById('password-popup').classList.add('show');
+        document.getElementById('password-input').value = '';
+        document.getElementById('wrong-password').classList.add('hidden');
+    }
+}
+
+function closePopup() {
+    document.getElementById('password-popup').classList.remove('show');
+}
+
+function checkPassword() {
+    const input = document.getElementById('password-input').value;
+    if (input === ADMIN_PASSWORD) {
+        adminLoggedIn = true;
+        closePopup();
+        showAdminTab();
+    } else {
+        document.getElementById('wrong-password').classList.remove('hidden');
+    }
+}
+
+function showAdminTab() {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-btn')[2].classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    document.getElementById('admin').classList.add('active');
+    updateAdminPanel();
+}
+
+function showMessage(text, type) {
+    const msgBox = document.getElementById('message');
+    msgBox.textContent = text;
+    msgBox.className = 'message show msg-' + type;
+    setTimeout(() => { msgBox.classList.remove('show'); }, 4000);
+}
+
+function updateAvailability() {
+    const selectedDate = document.getElementById('avail-date').value;
+    const listDiv = document.getElementById('facility-list');
+    listDiv.innerHTML = '';
+
+    for (let key in facilities) {
+        const name = facilities[key];
+        const booked = requests.filter(r => r.facility === key && r.date === selectedDate && r.status === 'approved');
+        const pending = requests.filter(r => r.facility === key && r.date === selectedDate && r.status === 'pending');
+
+        let statusText, statusClass, details = '';
+        
+        if (booked.length > 0) {
+            statusText = '❌ RESERVED';
+            statusClass = 'taken';
+            details = booked.map(r => r.startTime + ' - ' + r.endTime + ' | ' + r.teacher).join(', ');
+        } else if (pending.length > 0) {
+            statusText = '⏳ PENDING APPROVAL';
+            statusClass = 'pending';
+            details = pending.map(r => r.startTime + ' - ' + r.endTime + ' | ' + r.teacher).join(', ');
+        } else {
+            statusText = '✅ AVAILABLE';
+            statusClass = 'avail';
+            details = 'Ready for reservation';
+        }
+
+        listDiv.innerHTML += `
+            <div class="facility-item">
+                <strong>${name}</strong>
+                <p class="${statusClass}" style="margin: 5px 0;">${statusText}</p>
+                <p style="font-size: 12px; color: #666;">${details}</p>
+            </div>
+        `;
+    }
+}
+
+function checkSlot() {
+    const fac = document.getElementById('facility-select').value;
+    const date = document.getElementById('use-date').value;
+    const start = document.getElementById('start-time').value;
+    const end = document.getElementById('end-time').value;
+
+    if (!fac || !date || !start || !end) {
+        showMessage('Please fill in facility, date, and time first.', 'error');
+        return;
+    }
+    if (start >= end) {
+        showMessage('End time must be AFTER start time!', 'error');
+        return;
+    }
+
+    const conflict = requests.some(r => 
+        r.facility === fac && 
+        r.date === date && 
+        r.status === 'approved' &&
+        !(end <= r.startTime || start >= r.endTime)
+    );
+
+    if (conflict) {
+        showMessage('❌ This time is already reserved! Choose another.', 'error');
+    } else {
+        showMessage('✅ Available! You can submit your request.', 'success');
+    }
+}
+
+function submitForm(e) {
+    e.preventDefault();
+    
+    const studentName = document.getElementById('student-name').value;
+    const teacherName = document.getElementById('teacher-name').value;
+    const facility = document.getElementById('facility-select').value;
+    const date = document.getElementById('use-date').value;
+    const startTime = document.getElementById('start-time').value;
+    const endTime = document.getElementById('end-time').value;
+    const purpose = document.getElementById('purpose').value;
+
+    if (startTime >= endTime) {
+        showMessage('End time must be AFTER start time!', 'error');
+        return;
+    }
+
+    const conflict = requests.some(r => 
+        r.facility === facility && 
+        r.date === date && 
+        r.status === 'approved' &&
+        !(endTime <= r.startTime || startTime >= r.endTime)
+    );
+
+    if (conflict) {
+        showMessage('❌ Time conflict! This facility is already booked.', 'error');
+        return;
+    }
+
+    const refNumber = 'RES-' + Date.now().toString().slice(-8);
+    const newRequest = {
+        id: Date.now(),
+        ref: refNumber,
+        student: studentName,
+        teacher: teacherName,
+        facility: facility,
+        date: date,
+        startTime: startTime,
+        endTime: endTime,
+        purpose: purpose,
+        status: 'pending'
+    };
+
+    requests.push(newRequest);
+    saveData();
+    
+    showMessage('✅ Request Submitted! Reference: ' + refNumber, 'info');
+    e.target.reset();
+    updateAvailability();
+}
+
+function updateAdminPanel() {
+    const tbody = document.getElementById('admin-table');
+    tbody.innerHTML = '';
+    
+    if (requests.length === 0) {
+        document.getElementById('no-admin').classList.remove('hidden');
+        return;
+    }
+    document.getElementById('no-admin').classList.add('hidden');
+
+    const order = { pending: 0, approved: 1, declined: 2 };
+    const sorted = [...requests].sort((a, b) => order[a.status] - order[b.status]);
+
+    sorted.forEach(r => {
+        let statusBadge = r.status === 'pending' ? '⏳ Pending' :
+                          r.status === 'approved' ? '✅ Approved' : '❌ Declined';
+        
+        let actions = '';
+        if (r.status === 'pending') {
+            actions = `<button class="btn-green btn-sm" onclick="approveReq(${r.id})">✅Approve</button>
+                       <button class="btn-red btn-sm" onclick="declineReq(${r.id})">❌Decline</button>`;
+        } else if (r.status === 'approved') {
+            actions = `<button class="btn-blue btn-sm" onclick="showReceipt(${r.id})">🧾Receipt</button>
+                       <button class="btn-red btn-sm" onclick="declineReq(${r.id})">❌Cancel</button>`;
+        } else {
+            actions = `<button class="btn-green btn-sm" onclick="approveReq(${r.id})">✅Re-Approve</button>`;
+        }
+
+        tbody.innerHTML += `
+            <tr>
+                <td style="font-size: 10.5px;">${r.ref}</td>
+                <td>${facilities[r.facility]}</td>
+                <td>${r.date}</td>
+                <td>${r.startTime}-${r.endTime}</td>
+                <td>${r.student}</td>
+                <td>${r.teacher}</td>
+                <td style="max-width: 90px; font-size: 11px;">${r.purpose}</td>
+                <td>${statusBadge}</td>
+                <td style="white-space: nowrap;">${actions}</td>
+            </tr>
+        `;
+    });
+}
+
+function approveReq(id) {
+    const req = requests.find(r => r.id === id);
+    
+    const conflict = requests.some(r => 
+        r.id !== id &&
+        r.facility === req.facility &&
+        r.date === req.date &&
+        r.status === 'approved' &&
+        !(req.endTime <= r.startTime || req.startTime >= r.endTime)
+    );
+
+    if (conflict) {
+        alert('❌ CONFLICT! Another request already approved for this time.');
+        return;
+    }
+
+    if (confirm('✅ Approve this request?')) {
+        req.status = 'approved';
+        saveData();
+        showMessage('✅ Approved! Receipt generated.', 'success');
+        updateAdminPanel();
+        updateAvailability();
+        showReceipt(id);
+    }
+}
+
+function declineReq(id) {
+    if (confirm('❌ Decline this request?')) {
+        const req = requests.find(r => r.id === id);
+        req.status = 'declined';
+        saveData();
+        showMessage('❌ Declined', 'success');
+        updateAdminPanel();
+        updateAvailability();
+    }
+}
+
+function showReceipt(id) {
+    const req = requests.find(r => r.id === id);
+    
+    const receiptHTML = `
+        <h3>🏫 SmartFacility QR</h3>
+        <p style="text-align:center; font-size:12px; color:#666;">OFFICIAL RESERVATION RECEIPT</p>
+        <hr>
+        <p><strong>Reference No:</strong> ${req.ref}</p>
+        <p><strong>Facility:</strong> ${facilities[req.facility]}</p>
+        <p><strong>Date of Use:</strong> ${req.date}</p>
+        <p><strong>Time:</strong> ${req.startTime} — ${req.endTime}</p>
+        <p><strong>Requested by:</strong> ${req.student}</p>
+        <p><strong>Teacher/Facilitator:</strong> ${req.teacher}</p>
+        <p><strong>Purpose:</strong> ${req.purpose}</p>
+        <hr>
+        <p style="text-align:center; font-weight:bold; color:#16a34a; font-size:16px;">✅ APPROVED & CONFIRMED</p>
+        <p style="font-size:11px; color:#888; text-align:center;">Please present this receipt to the office before use.<br>Thank you!</p>
+        <div style="display:flex; gap:10px; margin-top:15px;">
+            <button style="flex:1; background:#888; color:white; border:none; padding:8px; border-radius:5px;" onclick="closeReceipt()">Close</button>
+            <button style="flex:1; background:#2563eb; color:white; border:none; padding:8px; border-radius:5px;" onclick="window.print()">🖨️ Print</button>
+        </div>
+    `;
+    
+    document.getElementById('receipt-content').innerHTML = receiptHTML;
+    document.getElementById('receipt-popup').classList.add('show');
+}
+
+function closeReceipt() {
+    document.getElementById('receipt-popup').classList.remove('show');
+}
+
+function saveData() {
+    localStorage.setItem('reservation-data', JSON.stringify(requests));
+}
+</script>
+</body>
+                                                </html>
+  
